@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jogo Sem Velha do Ferippu</title>
+    <style>
+        :root {
+            --bg-color: #121212;
+            --grid-line-color: #333333;
+            --text-color: #ffffff;
+            --neon-blue: #00f3ff;
+            --neon-red: #ff003c;
+            --fade-opacity: 0.3;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 300;
+            letter-spacing: 2px;
+            margin-bottom: 1rem;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        select {
+            background-color: #222;
+            color: #fff;
+            border: 1px solid var(--grid-line-color);
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 1rem;
+            cursor: pointer;
+            outline: none;
+        }
+
+        .status-board {
+            font-size: 1.2rem;
+            height: 30px;
+            margin-bottom: 20px;
+            font-weight: bold;
+            transition: color 0.3s ease;
+        }
+
+        /* estrutura do jogo da velha */
+        .board {
+            display: grid;
+            grid-template-columns: repeat(3, 100px);
+            grid-template-rows: repeat(3, 100px);
+        }
+
+        @media (max-width: 400px) {
+            .board {
+                grid-template-columns: repeat(3, 85px);
+                grid-template-rows: repeat(3, 85px);
+            }
+        }
+
+        .cell {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 4rem;
+            font-weight: bold;
+            cursor: pointer;
+            border: 2px solid var(--grid-line-color);
+            transition: opacity 0.4s ease, transform 0.2s ease;
+            user-select: none;
+        }
+
+        /* UI limpa sem bordas*/
+        .cell:nth-child(-n+3) { border-top: none; }
+        .cell:nth-child(n+7) { border-bottom: none; }
+        .cell:nth-child(3n+1) { border-left: none; }
+        .cell:nth-child(3n) { border-right: none; }
+
+        /* Estilo de cor neon para o X e O */
+        .cell .piece {
+            animation: appear 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        .player-x {
+            color: var(--neon-blue);
+            filter: drop-shadow(0 0 8px var(--neon-blue));
+        }
+
+        .player-o {
+            color: var(--neon-red);
+            filter: drop-shadow(0 0 8px var(--neon-red));
+        }
+
+        .fade-warning {
+            opacity: var(--fade-opacity);
+            transform: scale(0.9);
+        }
+
+        @keyframes appear {
+            0% { opacity: 0; transform: scale(0.5); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        .btn-restart {
+            margin-top: 30px;
+            padding: 10px 25px;
+            background: transparent;
+            color: #fff;
+            border: 1px solid var(--grid-line-color);
+            border-radius: 5px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-restart:hover {
+            background: #222;
+            border-color: #fff;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Jogo Sem Velha</h1>
+        <div class="controls">
+            <div>
+                <label for="difficulty">Escolha a Dificuldade: </label>
+                <select id="difficulty">
+                    <option value="easy">Fácil</option>
+                    <option value="medium">Médio</option>
+                    <option value="hard">Difícil</option>
+                    <option value="impossible" selected>Vingança da Veia</option>
+                </select>
+            </div>
+        </div>
+        <div class="status-board" id="status">Seu Turno (X)</div>
+    </header>
+
+    <div class="board" id="board">
+        <!-- Funções do jogo em JS -->
+    </div>
+
+    <button class="btn-restart" id="restartBtn">Reiniciar</button>
+
+    <script>
+        class InfiniteTicTacToe {
+            constructor() {
+                this.boardElement = document.getElementById('board');
+                this.statusElement = document.getElementById('status');
+                this.restartBtn = document.getElementById('restartBtn');
+                this.difficultySelect = document.getElementById('difficulty');
+                
+                this.winConditions = [
+                    [0, 1, 2], [3, 4, 5], [6, 7, 8], // Linhas
+                    [0, 3, 6], [1, 4, 7], [2, 5, 8], // Colunas
+                    [0, 4, 8], [2, 4, 6]             // Diagonais
+                ];
+
+                this.initGame();
+                this.bindEvents();
+            }
+
+            initGame() {
+                this.boardState = Array(9).fill(null);
+                this.moves = { X: [], O: [] }; // Filas (FIFO)
+                this.currentPlayer = 'X'; // X é humano, O é IA
+                this.isGameOver = false;
+                this.isAITurn = false;
+                
+                this.renderBoard();
+                this.updateStatus();
+            }
+
+            bindEvents() {
+                this.restartBtn.addEventListener('click', () => this.initGame());
+                this.difficultySelect.addEventListener('change', () => this.initGame());
+            }
+
+            renderBoard() {
+                this.boardElement.innerHTML = '';
+                for (let i = 0; i < 9; i++) {
+                    const cell = document.createElement('div');
+                    cell.classList.add('cell');
+                    cell.dataset.index = i;
+                    cell.addEventListener('click', () => this.handleCellClick(i));
+                    this.boardElement.appendChild(cell);
+                }
+            }
+
+            handleCellClick(index) {
+                if (this.isGameOver || this.isAITurn || this.boardState[index] !== null) return;
+                this.playTurn(index, 'X');
+            }
+
+            playTurn(index, player) {
+                // Adiciona a nova peça
+                this.boardState[index] = player;
+                this.moves[player].push(index);
+
+                // Mecânica de loop
+                let removedIndex = null;
+                if (this.moves[player].length > 3) {
+                    removedIndex = this.moves[player].shift();
+                    this.boardState[removedIndex] = null;
+                }
+
+                this.updateUI(index, player, removedIndex);
+
+                if (this.checkWin(this.boardState, player)) {
+                    this.endGame(player);
+                    return;
+                }
+
+                this.currentPlayer = player === 'X' ? 'O' : 'X';
+                this.updateOpacity();
+                this.updateStatus();
+
+                if (this.currentPlayer === 'O' && !this.isGameOver) {
+                    this.isAITurn = true;
+                    setTimeout(() => this.aiMove(), 600); // Delay
+                } else {
+                    this.isAITurn = false;
+                }
+            }
+
+            updateUI(newIndex, player, removedIndex) {
+                const cells = document.querySelectorAll('.cell');
+                
+                // Adiciona nova peça no tabuleiro
+                const newPiece = document.createElement('span');
+                newPiece.textContent = player;
+                newPiece.classList.add('piece', player === 'X' ? 'player-x' : 'player-o');
+                cells[newIndex].appendChild(newPiece);
+
+                // Remove a peça antiga do tabuleiro
+                if (removedIndex !== null) {
+                    cells[removedIndex].innerHTML = '';
+                }
+            }
+
+            updateOpacity() {
+                // Reseta opacidade de todas
+                document.querySelectorAll('.cell').forEach(cell => cell.classList.remove('fade-warning'));
+                
+                //reduz a opdacidade da peça que sai do tabuleiro na PRÓXIMA jogada do jogador atual X ou O
+                if (!this.isGameOver && this.moves[this.currentPlayer].length === 3) {
+                    const oldestMove = this.moves[this.currentPlayer][0];
+                    const cellToFade = document.querySelector(`.cell[data-index='${oldestMove}']`);
+                    if (cellToFade) cellToFade.classList.add('fade-warning');
+                }
+            }
+
+            updateStatus() {
+                if (this.isGameOver) return;
+                this.statusElement.textContent = this.currentPlayer === 'X' ? "Seu Turno (X)" : "Turno da IA (O)";
+                this.statusElement.style.color = this.currentPlayer === 'X' ? 'var(--neon-blue)' : 'var(--neon-red)';
+            }
+
+            checkWin(board, player) {
+                return this.winConditions.some(combination => {
+                    return combination.every(index => board[index] === player);
+                });
+            }
+
+            endGame(winner) {
+                this.isGameOver = true;
+                this.statusElement.textContent = winner === 'X' ? "BOOYAH!" : "A IA VENCEU, É O FIM DO MUNDO!";
+                this.statusElement.style.color = '#fff';
+            }
+
+            getAvailableMoves(board) {
+                return board.map((val, i) => val === null ? i : null).filter(val => val !== null);
+            }
+
+            // --- INTELIGÊNCIA ARTIFICIAL DIFICULDADES ---
+
+            aiMove() {
+                const difficulty = this.difficultySelect.value;
+                const availableMoves = this.getAvailableMoves(this.boardState);
+                let chosenMove = null;
+
+                if (difficulty === 'easy') {
+                    // 1. Fácil: 100% BURRO
+                    chosenMove = availableMoves[Math.floor(Math.random() * availableMoves.length)];
+                } 
+                else if (difficulty === 'medium') {
+                    // 2. Médio: Ganha ou Bloqueia no estado atual, ignora o desaparecimento
+                    chosenMove = this.findWinningMove('O', false) ?? this.findWinningMove('X', false) ?? availableMoves[Math.floor(Math.random() * availableMoves.length)];
+                } 
+                else if (difficulty === 'hard') {
+                    // 3. Difícil: Ganha/Bloqueia, considera o desaparecimento -> Tática: Centro > Quinas > Aleatório
+                    chosenMove = this.findWinningMove('O', true) ?? this.findWinningMove('X', true);
+                    
+                    if (chosenMove === null) {
+                        const tacticalPref = [4, 0, 2, 6, 8, 1, 3, 5, 7]; // Centro, Quinas, Bordas
+                        for (let move of tacticalPref) {
+                            if (availableMoves.includes(move)) {
+                                chosenMove = move;
+                                break;
+                            }
+                        }
+                    }
+                } 
+                else if (difficulty === 'impossible') {
+                    // 4. Impossível.
+                    let bestScore = -Infinity;
+                    
+                    for (let move of availableMoves) {
+                        // Simula jogada
+                        const simState = this.simulateMove([...this.boardState], [...this.moves.X], [...this.moves.O], move, 'O');
+                        // 6 é mais que o suficiente para um tabuleiro 6x6
+                        let score = this.minimax(simState.board, simState.movesX, simState.movesO, 0, false, -Infinity, Infinity);
+                        
+                        if (score > bestScore) {
+                            bestScore = score;
+                            chosenMove = move;
+                        }
+                    }
+                }
+
+                if (chosenMove !== null) {
+                    this.playTurn(chosenMove, 'O');
+                }
+            }
+
+            findWinningMove(player, considerFading) {
+                const availableMoves = this.getAvailableMoves(this.boardState);
+                for (let move of availableMoves) {
+                    let tempBoard = [...this.boardState];
+                    
+                    if (considerFading && this.moves[player].length === 3) {
+                        tempBoard[this.moves[player][0]] = null; // Finge que sumiu
+                    }
+                    
+                    tempBoard[move] = player;
+                    if (this.checkWin(tempBoard, player)) return move;
+                }
+                return null;
+            }
+
+            simulateMove(board, movesX, movesO, moveIndex, player) {
+                let newBoard = [...board];
+                let newMovesX = [...movesX];
+                let newMovesO = [...movesO];
+
+                newBoard[moveIndex] = player;
+                
+                if (player === 'O') {
+                    newMovesO.push(moveIndex);
+                    if (newMovesO.length > 3) {
+                        newBoard[newMovesO.shift()] = null;
+                    }
+                } else {
+                    newMovesX.push(moveIndex);
+                    if (newMovesX.length > 3) {
+                        newBoard[newMovesX.shift()] = null;
+                    }
+                }
+
+                return { board: newBoard, movesX: newMovesX, movesO: newMovesO };
+            }
+
+            // Motivo de eu ter feito esse jogo - algoritmo minimax com Poda alfa-beta
+            minimax(board, movesX, movesO, depth, isMaximizing, alpha, beta) {
+                if (this.checkWin(board, 'O')) return 10 - depth;
+                if (this.checkWin(board, 'X')) return depth - 10;
+                // Limite de profundidade de simulação para evitar memory leaks
+                if (depth >= 6) return 0; 
+
+                const availableMoves = this.getAvailableMoves(board);
+                if (availableMoves.length === 0) return 0;
+
+                if (isMaximizing) {
+                    let maxEval = -Infinity;
+                    for (let move of availableMoves) {
+                        const sim = this.simulateMove(board, movesX, movesO, move, 'O');
+                        let evalScore = this.minimax(sim.board, sim.movesX, sim.movesO, depth + 1, false, alpha, beta);
+                        maxEval = Math.max(maxEval, evalScore);
+                        alpha = Math.max(alpha, evalScore);
+                        if (beta <= alpha) break;
+                    }
+                    return maxEval;
+                } else {
+                    let minEval = Infinity;
+                    for (let move of availableMoves) {
+                        const sim = this.simulateMove(board, movesX, movesO, move, 'X');
+                        let evalScore = this.minimax(sim.board, sim.movesX, sim.movesO, depth + 1, true, alpha, beta);
+                        minEval = Math.min(minEval, evalScore);
+                        beta = Math.min(beta, evalScore);
+                        if (beta <= alpha) break;
+                    }
+                    return minEval;
+                }
+            }
+        }
+
+        // Inicializa o jogo após o carregamento da página
+        document.addEventListener('DOMContentLoaded', () => {
+            new InfiniteTicTacToe();
+        });
+    </script>
+</body>
+</html>
